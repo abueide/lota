@@ -3,36 +3,25 @@
 
   inputs = {
     nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url  = "github:numtide/flake-utils";
+    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
   };
 
-  outputs = { self, nixpkgs, rust-overlay, flake-utils, ... }:
+  outputs = inputs: with inputs;
     flake-utils.lib.eachDefaultSystem (system:
       let
-        overlays = [ (import rust-overlay) ];
+        overlays = [
+          cargo2nix.overlays.default
+        ];
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        rust-toolchain = (pkgs.rust-bin.beta.latest.default.override { extensions = [ "rust-src" ]; });
-        cliffyPackage = pkgs.stdenv.mkDerivation {
-          name = "cliffy";
-          src = self;
-          buildInputs = [ pkgs.cargo pkgs.rustc ];
-          buildPhase = ''
-            cargo build --release
-          '';
-          installPhase = ''
-            install -D target/release/cliffy $out/bin/cliffy
-          '';
+        rustPkgs = pkgs.rustBuilder.makePackageSet {
+          rustVersion = "latest";
+          rustChannel = "beta";
+          packageFun = import ./Cargo.nix;
         };
-
-        apps.cliffy = {
-          type = "app";
-          program = "${cliffyPackage}/bin/cliffy";
-        };
-      in
-      with pkgs;
+      in rec
       {
         devShells.default = mkShell {
           buildInputs = [
@@ -41,17 +30,19 @@
             eza
             fd
             jetbrains.rust-rover
-            rust-toolchain
+            rustPkgs
           ];
 
           shellHook = ''
             alias ls=eza
             alias find=fd
-            export RUST_SRC_PATH="${rust-toolchain}/lib/rustlib/src/rust/library"
+            export RUST_SRC_PATH="${rustPkgs}/lib/rustlib/src/rust/library"
           '';
         };
-      defaultPackage = cliffyPackage;
-      defaultApp = apps.cliffy;
+        packages = {
+          cliffy = (rustPkgs.workspace.cliffy {});
+          default = packages.cliffy;
+        };
     }
-    );
+  );
 }
