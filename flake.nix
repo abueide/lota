@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url  = "github:numtide/flake-utils";
-    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.11.0";
+    cargo2nix.url    = "github:cargo2nix/cargo2nix/release-0.11.0";
   };
 
   outputs = inputs: with inputs;
@@ -23,25 +23,23 @@
         };
       in rec
       {
-        devShells.default = mkShell {
-          buildInputs = [
-            openssl
-            pkg-config
-            eza
-            fd
-            jetbrains.rust-rover
-            rustPkgs
-          ];
-
-          shellHook = ''
-            alias ls=eza
-            alias find=fd
-            export RUST_SRC_PATH="${rustPkgs}/lib/rustlib/src/rust/library"
-          '';
+        devShells.default = rustPkgs.workspaceShell {
+          packages = [ 
+            pkgs.jetbrains.rust-rover 
+            cargo2nix.outputs.packages."${system}".cargo2nix
+            ];
         };
         packages = {
           cliffy = (rustPkgs.workspace.cliffy {});
           default = packages.cliffy;
+        };
+        apps.repl = flake-utils.lib.mkApp {
+          drv = pkgs.writeShellScriptBin "repl" ''
+            confnix=$(mktemp)
+            echo "builtins.getFlake (toString $(git rev-parse --show-toplevel))" >$confnix
+            trap "rm $confnix" EXIT
+            nix repl $confnix
+          '';
         };
     }
   );
