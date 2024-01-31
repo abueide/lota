@@ -1,5 +1,5 @@
 {
-  description = "Cliffy - the helpful nix vm management tool";
+  description = "Legends of the Abyss";
 
   inputs = {
     nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
@@ -16,22 +16,34 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        rustPkgs = pkgs.rustBuilder.makePackageSet {
+        enginePkgs = pkgs.rustBuilder.makePackageSet {
           rustVersion = "latest";
           rustChannel = "beta";
-          packageFun = import ./Cargo.nix;
+          packageFun = import ./engine/Cargo.nix;
+        };
+        quadPkgs = pkgs.rustBuilder.makePackageSet {
+          rustVersion = "latest";
+          rustChannel = "beta";
+          packageFun = import ./quad/Cargo.nix;
         };
       in rec
       {
-        devShells.default = rustPkgs.workspaceShell {
+        devShells.default = enginePkgs.workspaceShell {
           packages = [ 
             pkgs.jetbrains.rust-rover 
             cargo2nix.outputs.packages."${system}".cargo2nix
-            ];
+          ];
+
+          LD_LIBRARY_PATH = builtins.concatStringsSep ":" [
+            "${pkgs.xorg.libX11}/lib"
+            "${pkgs.xorg.libXi}/lib"
+            "${pkgs.libGL}/lib"
+          ];
         };
         packages = {
-          cliffy = (rustPkgs.workspace.cliffy {});
-          default = packages.cliffy;
+          engine = (enginePkgs.workspace.engine {});
+          quad = (quadPkgs.workspace.quad {});
+          default = packages.quad;
         };
         apps.repl = flake-utils.lib.mkApp {
           drv = pkgs.writeShellScriptBin "repl" ''
